@@ -27,12 +27,6 @@ export function SiteHeader() {
           >
             Internal Tools
           </Link>
-          <Link 
-            href="/ontology" 
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Ontology
-          </Link>
           <span className="text-xs text-muted-foreground hidden sm:block">v1.0</span>
         </nav>
       </div>
