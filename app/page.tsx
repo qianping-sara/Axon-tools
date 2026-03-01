@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquareText } from "lucide-react";
+import { MessageSquareText, BarChart3 } from "lucide-react";
 import { ToolCard } from "@/components/tool-card";
 import { PageHeader } from "@/components/page-header";
 
@@ -18,6 +18,13 @@ const tools = [
       "Export SmartProposal chat with session info. View metadata and download conversations as CSV or PDF.",
     href: "/tools/smart-proposal-export",
     icon: MessageSquareText,
+  },
+  {
+    title: "Smart Proposal Dev Dashboard",
+    description:
+      "View conversation totals, proposal type breakdown, and unique user count for a selected time period.",
+    href: "/tools/smart-proposal-dashboard",
+    icon: BarChart3,
   },
 ];
 
