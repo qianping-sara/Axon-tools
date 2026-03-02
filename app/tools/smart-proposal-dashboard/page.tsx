@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, BarChart3, Users, MessageSquare, FileText, Copy, Check, Info } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, Copy, Check, Info } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface DashboardData {
-  start: string;
-  end: string;
-  totalConversations: number;
-  proposalTypeBreakdown: { type: string; count: number; percentage: number }[];
-  uniqueUserCount: number;
-  uniqueUserList: { user_id: string; user_name: string | null; user_mail: string | null }[];
-  sessionsInPeriod: { session_id: string; created_at: string; user_name: string | null; file_urls: string[] }[];
+  start: string | null;
+  end: string | null;
+  generatedAt: string | null;
+  sessionsInPeriod: { session_id: string; created_at: string; user_name: string | null; proposal_type: string | null; file_urls: string[] }[];
+  fromCache?: boolean;
 }
 
 function getDefaultPeriod(): { start: string; end: string } {
@@ -48,9 +46,7 @@ export default function SmartProposalDashboardPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(
-        `/api/smart-proposal-dashboard?start=${encodeURIComponent(period.start)}&end=${encodeURIComponent(period.end)}`
-      );
+      const res = await fetch("/api/smart-proposal-dashboard");
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load");
       setData(json);
@@ -60,13 +56,9 @@ export default function SmartProposalDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [period.start, period.end]);
+  }, []);
 
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
-
-  const handleApply = () => {
+  const handleForceReload = async () => {
     const days = diffDays(period.start, period.end);
     if (days < 0) {
       setError("End date must be on or after start date");
@@ -77,8 +69,26 @@ export default function SmartProposalDashboardPage() {
       return;
     }
     setError("");
-    fetchStats();
+    setLoading(true);
+    try {
+      const res = await fetch("/api/smart-proposal-dashboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start: period.start, end: period.end }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Reload failed");
+      setData(json);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reload failed");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   const rangeDays = diffDays(period.start, period.end);
   const rangeInvalid = rangeDays < 0 || rangeDays > MAX_RANGE_DAYS;
@@ -118,7 +128,7 @@ export default function SmartProposalDashboardPage() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="start" className="text-xs text-muted-foreground">
-                Start
+                Start（强制刷新时使用）
               </Label>
               <input
                 id="start"
@@ -130,7 +140,7 @@ export default function SmartProposalDashboardPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="end" className="text-xs text-muted-foreground">
-                End
+                End（强制刷新时使用）
               </Label>
               <input
                 id="end"
@@ -149,14 +159,14 @@ export default function SmartProposalDashboardPage() {
               />
             </div>
             <Button
-              onClick={handleApply}
+              onClick={handleForceReload}
               disabled={loading || rangeInvalid}
               size="default"
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "Apply"
+                "强制刷新"
               )}
             </Button>
           </div>
@@ -167,7 +177,7 @@ export default function SmartProposalDashboardPage() {
         <Info className="h-4 w-4" />
         <AlertDescription>
           <span className="font-medium text-foreground">统计口径：</span>
-          本页所有数据（Total conversations、Proposal type breakdown、Unique users、Sessions in period）均按「该时间段内有至少一条消息的会话」统计（以消息时间 created_at 为准），且已排除内部测试账号（Rujia Wang, Ge Zeng, DL-fabric, Ken Yu, Mengxi Zhang, Maggie Luo）。
+          下表为「该时间段内有至少一条消息的会话」（以消息时间 created_at 为准），已排除内部测试账号（Rujia Wang, Ge Zeng, DL-fabric, Ken Yu, Mengxi Zhang, Maggie Luo）。
         </AlertDescription>
       </Alert>
 
@@ -183,117 +193,6 @@ export default function SmartProposalDashboardPage() {
 
       {!loading && data && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Total conversations
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-3xl font-semibold tabular-nums">
-                  {data.totalConversations.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {data.start} – {data.end}
-                </p>
-                <div className="pt-2 border-t border-border">
-                  <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                    <BarChart3 className="h-3.5 w-3.5" />
-                    Proposal type breakdown
-                  </p>
-                  {data.proposalTypeBreakdown.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No data in this period.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-left py-2 font-medium text-muted-foreground">
-                              Type
-                            </th>
-                            <th className="text-right py-2 font-medium text-muted-foreground">
-                              Count
-                            </th>
-                            <th className="text-right py-2 font-medium text-muted-foreground">
-                              %
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data.proposalTypeBreakdown.map((row) => (
-                            <tr
-                              key={row.type}
-                              className="border-b border-border/50 last:border-0"
-                            >
-                              <td className="py-2 font-medium">{row.type}</td>
-                              <td className="text-right tabular-nums py-2">
-                                {row.count.toLocaleString()}
-                              </td>
-                              <td className="text-right tabular-nums py-2 text-muted-foreground">
-                                {row.percentage}%
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Unique users
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-3xl font-semibold tabular-nums">
-                  {data.uniqueUserCount.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Excluding internal test accounts
-                </p>
-                {data.uniqueUserList.length > 0 && (
-                  <div className="border border-border rounded-md overflow-hidden">
-                    <div className="max-h-48 overflow-y-auto">
-                      <table className="w-full text-xs">
-                        <thead className="sticky top-0 bg-muted/50 border-b border-border">
-                          <tr>
-                            <th className="text-left py-2 px-2 font-medium text-muted-foreground">
-                              User
-                            </th>
-                            <th className="text-left py-2 px-2 font-medium text-muted-foreground hidden sm:table-cell">
-                              ID
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data.uniqueUserList.map((u) => (
-                            <tr
-                              key={u.user_id}
-                              className="border-b border-border/50 last:border-0"
-                            >
-                              <td className="py-1.5 px-2">
-                                {u.user_name || u.user_mail || "(no name)"}
-                              </td>
-                              <td className="py-1.5 px-2 font-mono text-muted-foreground hidden sm:table-cell truncate max-w-[120px]" title={u.user_id}>
-                                {u.user_id}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -302,8 +201,21 @@ export default function SmartProposalDashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {data.start != null && data.end != null && (
+                <p className="text-xs text-muted-foreground mb-2">
+                  结果对应时间：{data.start} – {data.end}
+                  {data.generatedAt && (
+                    <> · 生成于 {formatDateTime(data.generatedAt)}</>
+                  )}
+                </p>
+              )}
+              {data.fromCache === false && data.sessionsInPeriod?.length === 0 && data.start == null && (
+                <p className="text-sm text-muted-foreground mb-3">
+                  暂无缓存数据，请选择时间范围后点击「强制刷新」从数据库加载。
+                </p>
+              )}
               <p className="text-xs text-muted-foreground mb-3">
-                All sessions with activity in this period. Create time = first message in period. File URLs = generated files (empty = none). Excludes internal test accounts.
+                Create time = first message in period. File URLs = generated files (empty = none). Excludes internal test accounts.
               </p>
               {!data.sessionsInPeriod?.length ? (
                 <p className="text-sm text-muted-foreground">None.</p>
@@ -320,6 +232,9 @@ export default function SmartProposalDashboardPage() {
                             User
                           </th>
                           <th className="text-left py-2 px-2 font-medium text-muted-foreground">
+                            Proposal type
+                          </th>
+                          <th className="text-left py-2 px-2 font-medium text-muted-foreground">
                             Session ID
                           </th>
                           <th className="text-left py-2 px-2 font-medium text-muted-foreground">
@@ -328,7 +243,7 @@ export default function SmartProposalDashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.sessionsInPeriod.map((row) => (
+                        {(data.sessionsInPeriod ?? []).map((row) => (
                           <tr
                             key={row.session_id}
                             className="border-b border-border/50 last:border-0"
@@ -338,6 +253,9 @@ export default function SmartProposalDashboardPage() {
                             </td>
                             <td className="py-1.5 px-2">
                               {row.user_name ?? "(no name)"}
+                            </td>
+                            <td className="py-1.5 px-2">
+                              {row.proposal_type ?? "—"}
                             </td>
                             <td className="py-1.5 px-2">
                               <div className="flex items-center gap-1.5">
