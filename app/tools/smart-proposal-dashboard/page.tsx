@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, FileText, Copy, Check, Info } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, Copy, Check, Info, Download } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -110,6 +110,47 @@ export default function SmartProposalDashboardPage() {
     });
   };
 
+  const handleDownloadCsv = () => {
+    if (!data?.sessionsInPeriod?.length) return;
+
+    const rows = data.sessionsInPeriod;
+    const header = [
+      "Create time",
+      "User",
+      "Proposal type",
+      "Session ID",
+      "File URLs",
+    ];
+
+    const escape = (val: string) => `"${val.replace(/"/g, '""')}"`;
+
+    const csv = [
+      header.join(","),
+      ...rows.map((row) => {
+        const fileUrlsJoined = row.file_urls.join(" | ");
+        return [
+          escape(formatDateTime(row.created_at)),
+          escape(row.user_name ?? ""),
+          escape(row.proposal_type ?? ""),
+          escape(row.session_id),
+          escape(fileUrlsJoined),
+        ].join(",");
+      }),
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `smart-proposal-dev-dashboard-${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="w-[80%] max-w-6xl mx-auto py-8">
       <div className="mb-8">
@@ -177,7 +218,7 @@ export default function SmartProposalDashboardPage() {
         <Info className="h-4 w-4" />
         <AlertDescription>
           <span className="font-medium text-foreground">统计口径：</span>
-          下表为「该时间段内有至少一条消息的会话」（以消息时间 created_at 为准），已排除内部测试账号（Rujia Wang, Ge Zeng, DL-fabric, Ken Yu, Mengxi Zhang, Maggie Luo）。
+          下表为「该时间段内有至少一条消息的会话」（以消息时间 created_at 为准），已排除内部测试账号（Rujia Wang, Ge Zeng, DL-fabric, Ken Yu, Mengxi Zhang, Maggie Luo）。系统每天新加坡时间 12:00 会按默认时间区间自动刷新并写入 Redis，页面默认读取最近一次缓存结果，仅在需要查看自定义时间范围时使用上方日期 +「强制刷新」访问数据库。
         </AlertDescription>
       </Alert>
 
@@ -194,11 +235,21 @@ export default function SmartProposalDashboardPage() {
       {!loading && data && (
         <div className="space-y-6">
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 Sessions in period
               </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadCsv}
+                disabled={!data.sessionsInPeriod?.length}
+                className="gap-1"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Download CSV</span>
+              </Button>
             </CardHeader>
             <CardContent>
               {data.start != null && data.end != null && (
@@ -243,7 +294,7 @@ export default function SmartProposalDashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(data.sessionsInPeriod ?? []).map((row) => (
+                        {(data.sessionsInPeriod ?? []).slice(0, 30).map((row) => (
                           <tr
                             key={row.session_id}
                             className="border-b border-border/50 last:border-0"
@@ -276,19 +327,23 @@ export default function SmartProposalDashboardPage() {
                                 </button>
                               </div>
                             </td>
-                            <td className="py-1.5 px-2 max-w-[220px]">
+                            <td className="py-1.5 px-2">
                               {row.file_urls.length === 0 ? (
                                 <span className="text-muted-foreground">—</span>
                               ) : (
-                                <ul className="list-disc list-inside space-y-0.5 truncate" title={row.file_urls.join("\n")}>
-                                  {row.file_urls.slice(0, 3).map((url, i) => (
-                                    <li key={i} className="truncate font-mono text-[11px]">
-                                      {url}
+                                <ul className="list-disc list-inside space-y-0.5">
+                                  {row.file_urls.map((url, i) => (
+                                    <li key={i} className="break-all font-mono text-[11px]">
+                                      <a
+                                        href={url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-primary hover:underline underline-offset-2"
+                                      >
+                                        {url}
+                                      </a>
                                     </li>
                                   ))}
-                                  {row.file_urls.length > 3 && (
-                                    <li className="text-muted-foreground">+{row.file_urls.length - 3} more</li>
-                                  )}
                                 </ul>
                               )}
                             </td>
@@ -299,6 +354,7 @@ export default function SmartProposalDashboardPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-2 px-2">
                     Total: {data.sessionsInPeriod.length} session(s)
+                    {data.sessionsInPeriod.length > 30 && " · Showing first 30 in table"}
                   </p>
                 </div>
               )}
