@@ -127,7 +127,7 @@ export default function SmartProposalDashboardPage() {
     const csv = [
       header.join(","),
       ...rows.map((row) => {
-        const fileUrlsJoined = row.file_urls.join(" | ");
+        const fileUrlsJoined = row.file_urls.join("\n");
         return [
           escape(formatDateTime(row.created_at)),
           escape(row.user_name ?? ""),
@@ -294,7 +294,7 @@ export default function SmartProposalDashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(data.sessionsInPeriod ?? []).slice(0, 30).map((row) => (
+                        {(data.sessionsInPeriod ?? []).map((row) => (
                           <tr
                             key={row.session_id}
                             className="border-b border-border/50 last:border-0"
@@ -354,7 +354,6 @@ export default function SmartProposalDashboardPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-2 px-2">
                     Total: {data.sessionsInPeriod.length} session(s)
-                    {data.sessionsInPeriod.length > 30 && " · Showing first 30 in table"}
                   </p>
                 </div>
               )}
